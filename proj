@@ -1,0 +1,156 @@
+#include <arpa/inet.h>
+#include <errno.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdbool.h>
+#include <time.h>
+#include <ctype.h>
+
+#define MAXBUFLEN 1024
+
+struct Game{
+    char p1 [8];
+    char p2[8];
+    int score;
+    char flood [100];
+
+};
+
+void exit_with_perror(char *msg) {
+    perror(msg);
+    exit(0);
+}
+
+int main(int argc, char *argv[]) {
+
+    int sockfd;
+    struct Game data;
+    int score = 0, p_score;
+    struct sockaddr_in p1_addr, p2_addr;
+    int is_p1 = 0;
+    char input[MAXBUFLEN], temp [2], nickname [15];
+
+    size_t addrlen = sizeof(struct sockaddr_in);
+    
+    
+
+    if (argc != 4) {
+        fprintf(stderr, "usage: server ip port\n");
+        exit(0);
+    }
+    int PORT = strtol(argv[2], NULL, 10);
+    if (PORT <= 0 || PORT > 65535) {
+        fprintf(stderr, "Invalid port number.\n");
+        exit_with_perror("Port");}
+        
+    memset(&data, 0, sizeof(data));
+    if((sockfd = socket(AF_INET, SOCK_DGRAM, 0))<0){
+        exit_with_perror("socket creation");
+    }
+    
+    memset(&p1_addr, 0, sizeof(p1_addr));
+    p1_addr.sin_family = AF_INET;
+    p1_addr.sin_addr.s_addr = INADDR_ANY;
+    p1_addr.sin_port = htons(PORT);
+    
+    if (bind(sockfd, (const struct sockaddr*)&p1_addr, sizeof(p1_addr)) == 0){
+        is_p1=1;
+        printf("Waiting for p2...\n");
+    
+        srand(time(NULL));
+        score = rand()%10+1;
+        data.score = score;
+        printf("Initial score: %d\n", data.score);
+        
+        recvfrom(sockfd, (char*)&data, sizeof(data), 0,
+                        (struct sockaddr*)&p2_addr,
+                        (socklen_t*)&addrlen);        
+    }
+    
+
+    else{
+        is_p1 = 0;
+        printf("You are p2.\n");
+        memset(&p2_addr, 0, sizeof(p2_addr));
+        
+        p2_addr.sin_family = AF_INET;
+        p2_addr.sin_addr.s_addr = INADDR_ANY;
+        p2_addr.sin_port = htons(PORT);
+        inet_pton(AF_INET, argv[1], &p2_addr.sin_addr);
+        
+        strcpy(data.p2, argv[3]);
+        sendto(sockfd, (char*)&data, sizeof(data), 0, (struct sockaddr*)&p1_addr, addrlen);
+        recvfrom(sockfd, (char*)&data, sizeof(data), 0,(struct sockaddr*)&p1_addr,
+                        (socklen_t*)&addrlen);
+
+
+    }
+    while (score<50){
+        printf("Enter a number: \n", data.score);
+        
+        if (is_p1 == 0){
+         scanf("%s", input);       
+        if(isdigit(input)){
+            p_score = atoi(input);
+            if(p_score<1 || p_score>10){
+                data.score+=p_score;
+                printf("Score: %d\n", data.score);
+            }
+            else{
+                strcpy(data.flood, input);
+                printf("%s: %s\n", data.p1, data.flood);
+                }
+            }
+
+            if(score>=50){
+                printf("p2 won!\n");
+                exit(0);
+            }
+
+            sendto(sockfd, (char*)&data, sizeof(data), 0, (struct sockaddr*)&p2_addr, 
+                                                    (struct socklen_t*)&addrlen);
+            recvfrom(sockfd, (char*)&data, sizeof(data), 0,(struct sockaddr*)&p2_addr,
+                                                    (struct socklen_t*)&addrlen);
+            }
+
+        
+        else{
+            recvfrom(sockfd, (char*)&data, sizeof(data), 0,(struct sockaddr*)&p1_addr,
+                                                    (socklen_t*)&addrlen)
+            scanf("%d",p_score);
+
+            if(isdigit(input)){
+                p_score = atoi(input);
+                if(p_score<1 || p_score>10){
+                    data.score+=p_score;
+                    printf("Score: %d\n", data.score);
+                }
+                else{
+                    strcpy(data.flood, input);
+                    printf("%s: %s\n", data.p1, data.flood);
+                    
+
+                }
+            }
+
+            if(score>=50){
+                printf("p1 won!\n");
+                exit(0);
+            }
+            sendto(sockfd, (char*)&data, sizeof(data), 0, (struct sockaddr*)&p1_addr, 
+                                                    (socklen_t*)&addrlen);
+
+        }}
+        
+
+        close(sockfd);
+        return 0;
+    
+}
